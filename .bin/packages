@@ -1,0 +1,129 @@
+#!/usr/bin/env python
+
+import subprocess as S
+import argparse as AP
+import appdirs as AD
+import ia256utilities.filesystem as F
+
+
+def load_data():
+    data_dirs = AD.user_data_dir('packages', 'icearrow256')
+    data_file = data_dirs + '/data.json'
+    data = F.load_json(data_file)
+    if 'system' not in data:
+        data['system'] = sorted(['base', 'autoconf', 'automake', 'binutils', 'bison', 'fakeroot', 'file', 'findutils', 'flex', 'gawk', 'gcc', 'gettext', 'grep', 'groff', 'gzip', 'libtool', 'm4', 'make', 'pacman',
+                                 'patch', 'pkgconf', 'sed', 'sudo', 'texinfo', 'which', 'linux-xanmod', 'linux-xanmod-headers', 'linux-firmware', 'networkmanager', 'efibootmgr', 'grub', 'ntfs-3g', 'os-prober', 'xorg-server', 'xorg-xinit'])
+    if 'device' not in data:
+        data['device'] = ['rtl8821ce-dkms', 'nvidia-dkms',
+                          'nvidia-settings', 'xf86-video-amdgpu']
+    if 'apps' not in data:
+        data['apps'] = {"uncategorized": sorted(['i3-gaps', 'polybar', 'picom', 'dunst', 'papirus-icon-theme', 'otf-fira-mono',
+                                                 'otf-fira-sans', 'ttf-fira-code', 'wqy-zenhei', 'ttf-font-awesome', 'noto-fonts-cjk', 'noto-fonts-emoji', 'otf-font-awesome'])}
+    return data
+
+
+def get_array(dictionary):
+    arrays = []
+    for array in dictionary:
+        arrays += dictionary[array]
+    return arrays
+
+def save_data(data):
+    data_dirs = AD.user_data_dir('packages', 'icearrow256')
+    data_file = data_dirs + '/data.json'
+    F.save_json(data, data_file)
+
+
+def get_all_packages():
+    p = S.Popen(['pacman', '-Qe'], stdin=S.PIPE, stdout=S.PIPE, stderr=S.PIPE)
+    output, err = p.communicate()
+    row_packages = output.decode()
+    packages = []
+    for package in row_packages.split('\n'):
+        name = package.split(' ')[0].replace(' ', '')
+        if name:
+            packages.append(name)
+    return packages
+
+
+def print_packages(packages):
+    for package in packages:
+        print(package)
+
+
+def print_packages_one_line(packages):
+    result = ''
+    for package in packages:
+        result += package + ' '
+    print(result)
+
+
+def filter(packages, exclusion_packages):
+    result = []
+    for package in packages:
+        if package not in exclusion_packages:
+            result.append(package)
+    return result
+
+
+def show(packages, exclusion_packages):
+    result = []
+    for package in packages:
+        if package in exclusion_packages:
+            result.append(package)
+    return result
+
+
+def main():
+    parser = AP.ArgumentParser(description='Show pacman packages')
+    parser.add_argument('-e', '--exclude',
+                        action='store_true', help='exclude packages')
+    parser.add_argument('-d', '--device', action='store_true',
+                        help='show device packages')
+    parser.add_argument('-s', '--system', action='store_true',
+                        help='show system packages')
+    parser.add_argument('-o', '--one', action='store_true',
+                        help='show all in one line')
+    parser.add_argument('-a', '--app', action='store_true',
+                        help='show app packages')
+    parser.add_argument('-b', '--base', action='store_true',
+                        help='show app from base')
+    parser.add_argument('-m', '--missing', action='store_true',
+                        help='show missing packages')
+    args = parser.parse_args()
+    packages = get_all_packages()
+    data = load_data()
+    if args.base:
+        packages = sorted(data['system'] + get_array(data['apps']))
+    elif args.missing:
+        base_packages = sorted(data['system'] + get_array(data['apps']))
+        packages = filter(base_packages, packages)
+    elif args.exclude:
+        if args.device:
+            packages = filter(packages, data['device'])
+        if args.system:
+            packages = filter(packages, data['system'])
+        if args.app:
+            packages = filter(packages, get_array(data['apps']))
+    else:
+        new_packages = []
+        if args.device:
+            new_packages = sorted(
+                list(set(new_packages + show(packages, data['device']))))
+        if args.system:
+            new_packages = sorted(
+                list(set(new_packages + show(packages, data['system']))))
+        if args.app:
+            new_packages = sorted(
+                list(set(new_packages + show(packages, get_array(data['apps'])))))
+        if args.device or args.system or args.app:
+            packages = new_packages
+    if args.one:
+        print_packages_one_line(packages)
+    else:
+        print_packages(packages)
+    save_data(data)
+
+
+if __name__ == '__main__':
+    main()
